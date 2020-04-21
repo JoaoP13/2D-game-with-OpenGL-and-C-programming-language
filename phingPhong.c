@@ -1,0 +1,915 @@
+#include <SOIL/SOIL.h>
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdbool.h>
+#include <string.h>
+#include <time.h>
+#include "variaveis.h"
+#include "sprites.h"
+#include "desenhos.h"
+
+#define N_RETANGULOS 2
+#define N_JOGADORES 2
+
+
+Sprite barrasLaterais[N_RETANGULOS];
+Sprite bolinha;
+Sprite pontuacao;
+Sprite esc;
+Sprite reset;
+Mouse mouse;
+Jogador player[N_JOGADORES];
+Sprite linhasDeColisao[3];
+
+GLuint carregaTextura(const char* arquivo) {
+    GLuint idTextura = SOIL_load_OGL_texture(
+        arquivo,        // ⬅️ do parâmetro
+        SOIL_LOAD_AUTO,
+        SOIL_CREATE_NEW_ID,
+        SOIL_FLAG_INVERT_Y
+    );
+
+    if (idTextura == 0) {
+        printf("Erro carregando a textura: '%s'\n", SOIL_last_result());
+    }
+
+    return idTextura;
+}
+
+void inicializa_variaveis() {
+    glClearColor(1, 1, 1, 1); //Branco
+
+    // Pontuaçao dos jogadores
+    player[0].pontuacao = 0;
+    player[1].pontuacao = 0;
+    player[0].set = 0;
+    player[1].set = 0;
+    //linhasDeColisao
+    linhasDeColisao[0].posicaoX = -90;
+    linhasDeColisao[0].posicaoY = 25.5;
+    linhasDeColisao[0].largura = 10;
+    linhasDeColisao[0].altura = 1;
+
+    linhasDeColisao[1].posicaoX = 90;
+    linhasDeColisao[1].posicaoY = 25.5;
+    linhasDeColisao[1].largura = 10;
+    linhasDeColisao[1].altura = 1;
+
+    linhasDeColisao[2].posicaoX = -90;
+    linhasDeColisao[2].posicaoY = -25.5;
+    linhasDeColisao[2].largura = 10;
+    linhasDeColisao[2].altura = 1;
+
+    linhasDeColisao[3].posicaoX = +90;
+    linhasDeColisao[3].posicaoY = -25.5;
+    linhasDeColisao[3].largura = 10;
+    linhasDeColisao[3].altura = 10;
+
+    //Retângulo esquerdo
+    barrasLaterais[0].posicaoX = -90;
+    barrasLaterais[0].posicaoY = 0;
+    barrasLaterais[0].largura = 10;
+    barrasLaterais[0].altura = 50;
+
+    //Retângulo direito
+    barrasLaterais[1].posicaoX = 90;
+    barrasLaterais[1].posicaoY = 0;
+    barrasLaterais[1].largura = 10;
+    barrasLaterais[1].altura = 50;
+
+    //Bolinha
+    bolinha.posicaoX = 0;
+    bolinha.posicaoY = 0;
+    bolinha.largura = 10;
+    bolinha.altura = 20;
+    velocidade_bolinhaX = 3.0;
+    velocidade_bolinhaY = -1.5 ;
+
+    //esc retangulo
+    esc.posicaoX = 0;
+    esc.posicaoY = 0;
+    esc.largura = 50;
+    esc.altura = 50;
+
+    glEnable(GL_BLEND );
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    texturaBolinha = carregaTextura("img/bola.png");
+    texturaFundo = carregaTextura("img/fundo.png");
+    texturaBarras = carregaTextura("img/alien.png");
+    texturaConfirmacao = carregaTextura("img/sair.png");
+    texturaMenu = carregaTextura("img/mainmenu.png");
+    texturaInstrucoes = carregaTextura("img/menu.png");
+    texturaBotaoSair = carregaTextura("img/botaoSair.png");
+    texturaPlayer1 = carregaTextura("img/players.png");
+    texturaPlayer2 = carregaTextura("img/players.png");
+    texturaBotaoPausar = carregaTextura("img/pause.png");
+    texturaRestart = carregaTextura("img/restart.png");
+    texturaGameOver = carregaTextura("img/gameover.png");
+}
+
+void escreveTexto(void * font, char *s, float x, float y, float z) {
+    int i;
+    glRasterPos3f(x, y, z);
+
+    for (i = 0; i < strlen(s); i++) {
+        glutBitmapCharacter(font, s[i]);
+    }
+}
+
+void desenhaPontuacaoPlayer1() {
+    glColor3f(1.0, 0.3, 0.6);
+    char textoPadrao[11] = "Pontuacao: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[0].pontuacao);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xPontuacaoPlayer1, yPontuacaoPlayer1, 0);
+}
+
+void desenhaPontuacaoPlayer2() {
+    glColor3f(0.2, 0.4, 0.8);
+    char textoPadrao[11] = "Pontuacao: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[1].pontuacao);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xPontuacaoPlayer2, yPontuacaoPlayer2, 0);
+}
+
+void desenhaSetPlayer1() {
+    glColor3f(1.0, 0.3, 0.6);
+    char textoPadrao[11] = "Set: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[0].set);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xSetPlayer1, ySetPlayer1, 0);
+}
+
+void desenhaSetPlayer2() {
+    glColor3f(0.2, 0.4, 0.8);
+    char textoPadrao[11] = "Set: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[1].set);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xSetPlayer2, ySetPlayer2, 0);
+}
+
+void trocaCoordenadasPontuacao() {
+  int aux;
+
+  //Troca as coordenadas de desenho no texto
+  aux = xPontuacaoPlayer1;
+  xPontuacaoPlayer1 = xPontuacaoPlayer2;
+  xPontuacaoPlayer2 = aux;
+
+  aux = yPontuacaoPlayer1;
+  yPontuacaoPlayer1 = yPontuacaoPlayer2;
+  yPontuacaoPlayer2 = aux;
+}
+
+void trocaCoordenadasSet() {
+  int aux;
+
+  //Troca as coordenadas de desenho no texto
+  aux = xSetPlayer1;
+  xSetPlayer1 = xSetPlayer2;
+  xSetPlayer2 = aux;
+
+  aux = ySetPlayer1;
+  ySetPlayer1 = ySetPlayer2;
+  ySetPlayer2 = aux;
+}
+
+void trocaCoordenadasPlayers() {
+  int aux;
+
+  //Troca das variáveis dos vértices
+  aux = v0xPlayer1;
+  v0xPlayer1 = v0xPlayer2;
+  v0xPlayer2 = aux;
+
+  aux = v0yPlayer1;
+  v0yPlayer1 = v0yPlayer2;
+  v0yPlayer2 = aux;
+
+  aux = v1xPlayer1;
+  v1xPlayer1 = v1xPlayer2;
+  v1xPlayer2 = aux;
+
+  aux = v1yPlayer1;
+  v1yPlayer1 = v1yPlayer2;
+  v1yPlayer2 = aux;
+
+  aux = v2xPlayer1;
+  v2xPlayer1 = v2xPlayer2;
+  v2xPlayer2 = aux;
+
+  aux = v2yPlayer1;
+  v2yPlayer1 = v2yPlayer2;
+  v2yPlayer2 = aux;
+
+  aux = v3xPlayer1;
+  v3xPlayer1 = v3xPlayer2;
+  v3xPlayer2 = aux;
+
+  aux = v3yPlayer1;
+  v3yPlayer1 = v3yPlayer2;
+  v3yPlayer2 = aux;
+}
+
+void reinicia_round() {
+  barrasLaterais[0].posicaoX = -90;
+  barrasLaterais[0].posicaoY = 0;
+
+  //Retângulo direito
+  barrasLaterais[1].posicaoX = 90;
+  barrasLaterais[1].posicaoY = 0;
+
+  linhasDeColisao[0].posicaoX = -90;
+  linhasDeColisao[0].posicaoY = 25.5;
+  linhasDeColisao[1].posicaoX = 90;
+  linhasDeColisao[1].posicaoY = 25.5;
+  linhasDeColisao[2].posicaoX = -90;
+  linhasDeColisao[2].posicaoY = -25.5;
+
+  //Bolinha
+  bolinha.posicaoX = 0;
+  bolinha.posicaoY = 0;
+  velocidade_bolinhaX = 3.0;
+  velocidade_bolinhaY = -3.0;
+  comecar = false;
+}
+
+void zeraPontos() {
+  player[0].pontuacao = 0;
+  player[1].pontuacao = 0;
+}
+
+void venceu_jogo() {
+  if(player[0].set == 2)
+    controleTelas = GAMEOVER;
+
+  if(player[1].set == 2)
+    controleTelas = GAMEOVER;
+}
+
+void setNormal() {
+  if(vaiAdois == false) {
+
+    if(player[0].pontuacao == 11){
+      player[0].set++;
+      zeraPontos();
+      reinicia_round();
+      invertePlayer = !invertePlayer;
+      trocaCoordenadasPlayers();
+      trocaCoordenadasPontuacao();
+      trocaCoordenadasSet();
+    }
+
+    else if(player[1].pontuacao == 11) {
+      player[1].set++;
+      zeraPontos();
+      reinicia_round();
+      invertePlayer = !invertePlayer;
+      trocaCoordenadasPlayers();
+      trocaCoordenadasPontuacao();
+      trocaCoordenadasSet();
+    }
+  }
+}
+
+void adicionaPonto() {
+  if(bolinha.posicaoX + bolinha.largura > 100 && !invertePlayer) {
+    player[0].pontuacao += 1;
+    controleAumentoVelocidade = 0;
+    setNormal();
+    reinicia_round();
+  }
+
+  else if(bolinha.posicaoX + bolinha.largura > 100 && invertePlayer) {
+    player[1].pontuacao += 1;
+    controleAumentoVelocidade = 0;
+    setNormal();
+    reinicia_round();
+  }
+
+  if(bolinha.posicaoX - bolinha.largura < -100 && !invertePlayer) {
+    player[1].pontuacao += 1;
+    setNormal();
+    reinicia_round();
+  }
+
+  else if(bolinha.posicaoX - bolinha.largura < -100 && invertePlayer) {
+    player[0].pontuacao+=1;
+    setNormal();
+    reinicia_round();
+  }
+}
+
+void verificaSet() {
+  if(player[0].set == player[1].set && player[0].set != 0) {
+    if(player[0].pontuacao == 4 || player[1].pontuacao == 4) 
+      invertePlayer = true;
+      if((player[0].pontuacao >= 4 && player[1].pontuacao == 4) || (player[1].pontuacao >= 4 && player[0].pontuacao == 4))
+        invertePlayer = false;
+  }
+}
+
+void vai_A_dois() {
+  int diferenca = 2;
+  if(abs(player[0].pontuacao - player[1].pontuacao) == diferenca) {
+    if(player[0].pontuacao > player[1].pontuacao) {
+      player[0].set++;
+      zeraPontos();
+      reinicia_round();
+      invertePlayer = !invertePlayer;
+      vaiAdois = !vaiAdois;
+    }
+    else {
+      player[1].set++;
+      zeraPontos();
+      reinicia_round();
+      invertePlayer = !invertePlayer;
+      vaiAdois = !vaiAdois;
+    }
+  }
+  adicionaPonto();
+}
+
+void pontuacao_jogo() {
+  verificaSet();
+
+  if(player[0].pontuacao == 10 && player[1].pontuacao == 10)
+    vaiAdois = !vaiAdois;
+
+    if(vaiAdois == true)
+        vai_A_dois();
+      else
+        adicionaPonto();
+
+  venceu_jogo();
+}
+
+//******************************************************************************
+//***************************** MOVIMENTOS DA BOLINHA **************************
+void limite_bolinha_pontuacao (Sprite* posicoessBolinha) {
+  if(posicoessBolinha->posicaoY + posicoessBolinha->largura > 100)
+      velocidade_bolinhaY = -velocidade_bolinhaY;
+  if(posicoessBolinha->posicaoX + posicoessBolinha->largura > 100){
+      velocidade_bolinhaX = -velocidade_bolinhaX;
+        pontuacao_jogo();
+  }
+  if (posicoessBolinha->posicaoY - posicoessBolinha->largura < -100)
+      velocidade_bolinhaY = -velocidade_bolinhaY;
+  if(posicoessBolinha->posicaoX - posicoessBolinha->largura < -100){
+      velocidade_bolinhaX = -velocidade_bolinhaX;
+      pontuacao_jogo();
+  }
+}
+
+bool colisao_bolinha(Sprite* bola, Sprite* barra) {
+    if(bola->posicaoX - bola->largura/2 > barra->posicaoX + barra->largura/2)
+        return false;
+
+    if(bola->posicaoY - bola->largura/2 > barra->posicaoY + barra->altura/2 &&
+        bola->posicaoX - bola->largura/2 < barra->posicaoX + barra->largura/2)
+        return false;
+
+    if(bola->posicaoX + bola-> largura/2 < barra->posicaoX - barra->largura/2)
+        return false;
+
+    if(bola->posicaoY + bola->altura/2 < barra->posicaoY - barra-> altura/2 &&
+        bola->posicaoX - bola->largura < barra->posicaoX + bola->largura)
+        return false;
+
+    controleAumentoVelocidade += 0.5;
+
+    return true;
+}
+
+void aumenta_velocidade_bolinha() {
+  colisaoBarraEsquerda = colisao_bolinha(&bolinha, barrasLaterais);
+  colisaoBarraDireita = colisao_bolinha(&bolinha, &barrasLaterais[1]);
+
+  if((colisaoBarraEsquerda || colisaoBarraDireita) && controleAumentoVelocidade >= 4) {
+    if(velocidade_bolinhaX >= 5.0) {
+      velocidade_bolinhaX = 5.0;
+      velocidade_bolinhaY = 5.0;
+    }
+    else{
+      velocidade_bolinhaX = 1.17 * velocidade_bolinhaX;
+      velocidade_bolinhaY = 1.17 * velocidade_bolinhaY;
+    }
+  }
+    bolinha.posicaoX += velocidade_bolinhaX;
+    bolinha.posicaoY += velocidade_bolinhaY;
+}
+
+int movimenta_bolinha(Sprite* posicoesBolinha) {
+    if(colisao_bolinha(posicoesBolinha,&barrasLaterais[0]) == true){
+          velocidade_bolinhaX = -velocidade_bolinhaX ;
+    }
+    if(colisao_bolinha(posicoesBolinha,&barrasLaterais[1]) == true){
+        velocidade_bolinhaX = -velocidade_bolinhaX ;
+    }
+
+    limite_bolinha_pontuacao(posicoesBolinha);
+    aumenta_velocidade_bolinha();
+}
+
+void reiniciar() {
+    inicializa_variaveis();
+}
+
+//Converte as posicoes para qualquer tamanho de tela
+int cpx(int x) {
+  return (glutGet(GLUT_WINDOW_WIDTH) * x) / 1000;
+}
+
+int cpy(int y) {
+  return (glutGet(GLUT_WINDOW_HEIGHT) * y) / 500;
+}
+
+//******************************************************************************
+//************************ DETECÇAO MOVIMENTO MOUSE ****************************
+void movimento_mouse(int button, int state, int x, int y) {
+  switch (controleTelas) {
+    case MENU:
+      if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+          if(x >= cpx(440) && x <= cpx(560) && y >= cpy(290)  && y <= cpy(340)) {
+            controleTelas = JOGO;
+            pausar = false;
+          }
+          else if(x >= cpx(415) && x <= cpx(600) && y >= cpy(380)  && y <= cpy(430)) controleTelas = INSTRUCOES;
+          else if(x >= cpx(820) && x <= cpx(980) && y >= cpy(410)  && y <= cpy(450)) exit(0);
+      }
+    break;
+
+    case INSTRUCOES:
+      if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+          if(x >= cpx(820) && x <= cpx(980) && y >= cpy(410)  && y <= cpy(450)) controleTelas = MENU;
+      }
+    break;
+
+    case JOGO:
+      if(aparecerESC) {
+        if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+          if(x >= cpx(526) && x <= cpx(626) && y >= cpy(313)  && y <= cpy(338)) exit(0);
+          else if(x >= cpx(377) && x <= cpx(526) && y >= cpy(313)  && y <= cpy(338)) {
+            pausar = false;
+            aparecerESC = false;
+          }
+        }
+      }
+
+      else if(reinicia) {
+        if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+          if(x >= cpx(402) && x <= cpx(523) && y >= cpy(303)  && y <= cpy(329)) {
+              reinicia = false;
+              reiniciar();
+
+          }
+          else if(x >= cpx(524) && x <= cpx(602) && y >= cpy(303)  && y <= cpy(329)) {
+            pausar = false;
+            reinicia = false;
+          }
+        }
+      }
+    break;
+
+    case GAMEOVER:
+      if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        if(x >= cpx(197) && x <= cpx(537) && y >= cpy(369)  && y <= cpy(398)) {
+          inicializa_variaveis();
+          controleTelas = MENU;
+        }
+
+        else if(x >= cpx(621) && x <= cpx(788) && y >= cpy(369)  && y <= cpy(398))
+          exit(0);
+      }
+    break;
+
+  default:
+    break;
+  }
+}
+
+//******************************************************************************
+//*************************** FUNCOES DE CONTROLE ******************************
+void confirmaESC() {
+  pausar = true;
+  aparecerESC = true;
+}
+
+void confirmaReiniciar() {
+  reinicia = true;
+}
+
+//******************************************************************************
+//************************** CRIA VERTEX ***************************************
+void cria_retanguloESC() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaConfirmacao);
+  glColor3f(1,1,1);
+  glPushMatrix();
+        glTranslatef(esc.posicaoX,esc.posicaoY,0);
+        glBegin(GL_TRIANGLE_FAN);
+
+          glTexCoord2f(0.1, 0.40); glVertex3f(-esc.largura/2,-esc.altura/2, 0);
+          glTexCoord2f(0.9, 0.40); glVertex3f(esc.largura/2,-esc.altura/2, 0);
+          glTexCoord2f(0.9, 0.8); glVertex3f(esc.largura/2,esc.altura/2, 0);
+          glTexCoord2f(0.1, 0.8); glVertex3f(-esc.largura/2,esc.altura/2, 0);
+
+        glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void cria_bolinha(Sprite* bolinha) {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texturaBolinha);
+    glColor3f(1,1,1);
+
+    glPushMatrix();
+        glTranslatef(bolinha->posicaoX,bolinha->posicaoY,0);
+        glBegin(GL_TRIANGLE_FAN);
+
+            glTexCoord2f(0, 0.75); glVertex2f(-bolinha->largura/2,-bolinha->altura/2);
+            glTexCoord2f(0.2,0.75); glVertex2f( bolinha->largura/2,-bolinha->altura/2);
+            glTexCoord2f(0.2, 1); glVertex2f( bolinha->largura/2, bolinha->altura/2);
+            glTexCoord2f(0 , 1); glVertex2f(-bolinha->largura/2, bolinha->altura/2);
+
+        glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void criaGameOver() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaGameOver);
+  glColor3f(1,1,1);
+
+  glBegin(GL_TRIANGLE_FAN);
+      glTexCoord2f(0, 0); glVertex2f(-100, -100);
+      glTexCoord2f(1, 0); glVertex2f(100, -100);
+      glTexCoord2f(1, 1); glVertex2f(100, 150);
+      glTexCoord2f(0, 1); glVertex2f(-100, 150);
+  glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void criaFundo() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texturaFundo);
+    glColor3f(1,1,1);
+
+    glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0); glVertex2f(-100, -100);
+        glTexCoord2f(1, 0); glVertex2f(100, -100);
+        glTexCoord2f(1, 1); glVertex2f(100, 150);
+        glTexCoord2f(0, 1); glVertex2f(-100, 150);
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaMenuJogo() {
+
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaMenu);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(0, 0.2); glVertex2f(-100, -100);
+    glTexCoord2f(1, 0.2); glVertex2f(100, -100);
+    glTexCoord2f(1, 1); glVertex2f(100, 150);
+    glTexCoord2f(0, 1); glVertex2f(-100, 150);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaInstrucoes() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaInstrucoes);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+    glTexCoord2f(0, 0.2); glVertex2f(-100, -100);
+        glTexCoord2f(1, 0.2); glVertex2f(100, -100);
+        glTexCoord2f(1, 1); glVertex2f(100, 150);
+        glTexCoord2f(0, 1); glVertex2f(-100, 150);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaTextoInstrucoes() {
+    glColor3f(0.5, 1, 0.5);
+    char primeiraLinha[100] = "Obrigado por entrar em nosso jogo! Primeiramente, vamos definir os controles: ";
+    char segundaLinha[150] = "         As teclas W e S controlam a barra do Player 1 e as teclas O e L controlam a barra do Player 2.";
+    char terceiraLinha[150] = "Quando algum jogador atingir 11 pontos, o lado sera trocado. Os controles permanecerao os mesmos.";
+    char quartaLinha[100] = "Desenvolvedores: Israel Terra e Joao Paulo Souza";
+    char quintaLinha[100] = "Trabalho de Computacao Grafica. Docente: Flavio Coutinho";
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, primeiraLinha , -80, 60, 0);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, segundaLinha , -80, 50, 0);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, terceiraLinha , -80, 30, 0);
+
+    glColor3f(1, 0, 0);
+      escreveTexto(GLUT_BITMAP_HELVETICA_18, quartaLinha , -80, -50, 0);
+      escreveTexto(GLUT_BITMAP_HELVETICA_18, quintaLinha , -80, -70, 0);
+}
+
+void desenhaBotaoSair() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaBotaoSair);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0); glVertex2f(65, -80);
+        glTexCoord2f(1, 0); glVertex2f(95, -80);
+        glTexCoord2f(1, 1); glVertex2f(95, -60);
+        glTexCoord2f(0, 1); glVertex2f(65, -60);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaBotaoPausar() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaBotaoPausar);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0); glVertex2f(-10, 10);
+        glTexCoord2f(1, 0); glVertex2f(10, 10);
+        glTexCoord2f(1, 1); glVertex2f(10, 30);
+        glTexCoord2f(0, 1); glVertex2f(-10, 30);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaNomePlayer1() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaPlayer1);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0.45); glVertex2f(v0xPlayer1, v0yPlayer1);
+        glTexCoord2f(1, 0.45); glVertex2f(v1xPlayer1, v1yPlayer1);
+        glTexCoord2f(1, 0.75); glVertex2f(v2xPlayer1, v2yPlayer1);
+        glTexCoord2f(0, 0.75); glVertex2f(v3xPlayer1, v3yPlayer1);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaNomePlayer2() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaPlayer2);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0, 0.13); glVertex2f(v0xPlayer2, v0yPlayer2);
+        glTexCoord2f(1, 0.13); glVertex2f(v1xPlayer2, v1yPlayer2);
+        glTexCoord2f(1, 0.45); glVertex2f(v2xPlayer2, v2yPlayer2);
+        glTexCoord2f(0, 0.45); glVertex2f(v3xPlayer2, v3yPlayer2);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+void desenhaConfirmacaoRestart() {
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaRestart);
+  glColor3f(1, 1, 1);
+
+  glBegin(GL_TRIANGLE_FAN);
+        glTexCoord2f(0.09, 0.35); glVertex2f(-23, -23);
+        glTexCoord2f(0.90, 0.35); glVertex2f(23, -23);
+        glTexCoord2f(0.9,0.92); glVertex2f(23, 23);
+        glTexCoord2f(0.09,0.92); glVertex2f(-23, 23);
+    glEnd();
+  glDisable(GL_TEXTURE_2D);
+}
+
+
+void cria_barrasLaterais(Sprite *barras) {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texturaBarras);
+    glColor3f(1,1,1);
+
+    glPushMatrix();
+        glTranslatef(barras->posicaoX,barras->posicaoY,0);
+        glBegin(GL_TRIANGLE_FAN);
+
+            glTexCoord2f(0, 0); glVertex2f(-barras->largura/2,-barras->altura/2);
+            glTexCoord2f(1, 0); glVertex2f( barras->largura/2,-barras->altura/2);
+            glTexCoord2f(1, 1); glVertex2f( barras->largura/2, barras->altura/2);
+            glTexCoord2f(0, 1); glVertex2f(-barras->largura/2, barras->altura/2);
+
+        glEnd();
+    glDisable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
+
+void redimensiona(int width, int height) {
+
+    glViewport(0, 0, width, height);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-100, 100, -100, 130, -1, 1);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
+}
+
+//******************************************************************************
+//***************************** DETECÇAO DAS TECLAS ****************************
+void movimento_das_barras() {
+  if(controleTelas == JOGO){
+    if(pausar == false){
+      if(invertePlayer == false){
+            if(keyW == true){
+              if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
+              barrasLaterais[0].posicaoY += 7;
+              comecar = true;
+            }
+
+          if(keyS == true){
+              if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
+              barrasLaterais[0].posicaoY -= 7;
+              comecar = true;
+          }
+
+          if(keyO == true){
+              if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
+              barrasLaterais[1].posicaoY += 7;
+              comecar = true;
+          }
+
+          if(keyL==true){
+              if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
+              barrasLaterais[1].posicaoY -= 7;
+              comecar = true;
+          }
+      }
+      else{
+          if(keyW == true){
+            if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
+            barrasLaterais[1].posicaoY += 5;
+            comecar = true;
+          }
+
+        if(keyS == true){
+            if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
+            barrasLaterais[1].posicaoY -= 5;
+            comecar = true;
+        }
+
+        if(keyO == true){
+            if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
+            barrasLaterais[0].posicaoY += 5;
+            comecar = true;
+        }
+
+        if(keyL==true){
+            if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
+            barrasLaterais[0].posicaoY -= 5;
+            comecar = true;
+        }
+      }
+    }
+  }
+}
+
+void teclado(unsigned char key, int x, int y) {
+      switch (key) {
+
+        case 27:
+          confirmaESC();
+        break;
+
+        case 'w':
+          keyW = true;
+        break;
+
+        case 's':
+          keyS = true;
+        break;
+
+        case 'o':
+          keyO = true;
+        break;
+
+        case 'l':
+          keyL = true;
+        break;
+
+        case 'p':
+          pausar = !pausar;
+        break;
+
+        case 'r':
+          confirmaReiniciar();
+        break;
+
+        case 'y':
+          exit(0);
+        break;
+
+        default:
+            break;
+    }
+}
+
+void keyup(unsigned char key, int x, int y) {
+  switch (key) {
+    case 'w':
+      keyW = false;
+      break;
+
+    case 's':
+      keyS = false;
+      break;
+
+    case 'o':
+      keyO = false;
+      break;
+
+    case 'l':
+      keyL = false;
+      break;
+
+    default:
+      break;
+  }
+}
+
+void atualizaCena(int periodo) {
+  if(controleTelas == JOGO){
+    if(pausar == false) {
+      if(comecar == true){
+        movimenta_bolinha(&bolinha);
+      }
+    }
+  }
+    movimento_das_barras();
+    glutPostRedisplay();
+    glutTimerFunc(periodo, atualizaCena, periodo);
+}
+
+void desenhaCena() {
+     glClear(GL_COLOR_BUFFER_BIT);
+        switch (controleTelas) {
+          case MENU:
+            desenhaMenuJogo();
+            desenhaBotaoSair();
+          break;
+
+          case INSTRUCOES:
+            desenhaInstrucoes();
+            desenhaBotaoSair();
+            desenhaTextoInstrucoes();
+          break;
+
+          case JOGO:
+            criaFundo();
+              for(int i = 0; i < N_RETANGULOS; i++) {
+                cria_barrasLaterais(&barrasLaterais[i]);
+              }
+              desenhaNomePlayer1();
+              desenhaNomePlayer2();
+              desenhaPontuacaoPlayer1();
+              desenhaPontuacaoPlayer2();
+              desenhaSetPlayer1();
+              desenhaSetPlayer2();
+              cria_bolinha(&bolinha);
+              if(aparecerESC)
+                cria_retanguloESC();
+              if(pausar && !aparecerESC)
+                desenhaBotaoPausar();
+              if(reinicia)
+                desenhaConfirmacaoRestart();
+            break;
+
+          case GAMEOVER:
+            criaFundo();
+            criaGameOver();
+            break;
+
+          default:
+            break;
+        }
+
+    glutSwapBuffers();
+}
+
+int main(int argc, char **argv) {
+    glutInit(&argc,argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
+    glutInitWindowSize(1000,500);
+    glutCreateWindow("PhingPhong");
+    inicializa_variaveis();
+    glutReshapeFunc(redimensiona);
+    glutKeyboardUpFunc(keyup);
+    glutKeyboardFunc(teclado);
+    glutMouseFunc(movimento_mouse);
+    glutDisplayFunc(desenhaCena);
+    glutTimerFunc(0, atualizaCena, 33);
+    glutMainLoop();
+
+    return 0;
+}
