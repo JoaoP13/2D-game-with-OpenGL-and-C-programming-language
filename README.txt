@@ -19,3 +19,4 @@ Lista de itens adicionais implementados:
 *****************************************************
 Link github:
 https://github.com/isterra/isterra
+https://github.com/JoaoP13
